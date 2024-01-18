@@ -1,0 +1,9 @@
+/.venv
+/db
+/db-journal
+/events.csv
+/orders.csv
+/product.csv
+/sales.csv
+/store.csv
+/user.csv

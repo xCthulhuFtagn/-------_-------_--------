@@ -1,0 +1,20 @@
+SELECT user_id, order_id, order_date,
+    SUM(count * product_price) AS order_sum,
+    SUM(CASE 
+            WHEN comission_is_percent THEN count*product_price*product_comission/100 
+            ELSE count*product_comission 
+        END) AS order_revenue,
+    SUM(count) AS order_quantity,
+    COUNT(*) AS order_unique_products
+FROM (
+    SELECT user_id, order_id, order_date, product_id,
+        json_extract(json_each.value, "$.product_id") as product_id2, 
+        json_extract(json_each.value, "$.product_price") as product_price, 
+        json_extract(json_each.value, "$.count") as count,
+        json_extract(json_each.value, "$.product_comission") as product_comission,
+        json_extract(json_each.value, "$.comission_is_percent") as comission_is_percent
+
+    FROM orders JOIN sales USING(order_id), json_each(product_info)
+    WHERE is_accepted AND NOT is_canceled AND product_id = product_id2
+)
+GROUP BY order_id; 

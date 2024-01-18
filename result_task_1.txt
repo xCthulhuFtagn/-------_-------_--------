@@ -1,0 +1,28 @@
+  SELECT DENSE_RANK() OVER (ORDER BY session_start_dtm) AS session_id,
+    session_start_dtm, session_end_dtm, user_id, 
+    DENSE_RANK() OVER (PARTITION BY user_id order by session_start_dtm) as session_number,
+    is_client
+  FROM (
+    SELECT session_start_dtm, session_end_dtm, user_id, is_client 
+    FROM (
+      SELECT user_id as user_id, event_dtm as session_start_dtm, event_name,
+          LAG(event_name) over events_by_user_w AS prev_event_name,
+          LEAD(event_name) over events_by_user_w AS next_event_name,
+          CAST((JULIANDAY(event_dtm) - JULIANDAY(LAG(event_dtm) OVER events_by_user_w)) * 24 * 60 AS Integer) AS minutes_since_prev,
+          strftime("%d", event_dtm) != strftime("%d", LAG(event_dtm) OVER events_by_user_w) as day_changed_since_prev,
+          SUM(CASE WHEN event_name = 'purchase' THEN 1 else 0 END) OVER events_by_user_w > 0 as is_client,
+          MIN(event_dtm) FILTER (WHERE event_name = 'session_end') OVER events_after_by_user_w AS session_end_dtm
+      from events
+      WINDOW 
+      events_by_user_w AS (
+        PARTITION BY user_id ORDER BY event_dtm ASC
+      ),
+      events_after_by_user_w AS (
+        PARTITION by user_id order by event_dtm ASC
+        ROWS BETWEEN 1 FOLLOWING AND UNBOUNDED FOLLOWING
+      )
+    )
+    where event_name <> 'session_end' 
+      AND NOT (event_name = 'session_start' and next_event_name = 'session_end') --no empty sessions
+      and (prev_event_name = 'session_end' or prev_event_name IS NULL or day_changed_since_prev OR minutes_since_prev > 30)
+)

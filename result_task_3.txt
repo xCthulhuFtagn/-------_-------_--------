@@ -1,0 +1,16 @@
+SELECT store_id, store_name, product_characteristics,
+    SUM(count) as amount_by_month, month
+FROM (
+    SELECT store_id, 
+        product_name || ' ' || product_color as product_characteristics, 
+        store_name, count, month
+    FROM (
+        SELECT order_date, product_id, store_id, store_name,
+            STRFTIME('%m', order_date) as month,
+            json_extract(json_each.value, "$.product_id") as product_id2, 
+            json_extract(json_each.value, "$.count") as count
+        FROM orders JOIN sales USING(order_id) JOIN store USING(store_id), json_each(product_info)
+        WHERE is_accepted AND NOT is_canceled AND product_id = product_id2
+    ) JOIN product USING(product_id)
+)
+GROUP BY month, product_characteristics;
